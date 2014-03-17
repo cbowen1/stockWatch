@@ -1,12 +1,32 @@
-import java.awt.event.*;
+import java.awt.EventQueue;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 
-import javax.swing.*;
-import javax.swing.border.*;
-import javax.swing.event.*;
-import javax.swing.table.*;
-import javax.swing.text.Document;
+import javax.swing.BorderFactory;
+import javax.swing.DefaultComboBoxModel;
+import javax.swing.GroupLayout;
+import javax.swing.JButton;
+import javax.swing.JComboBox;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JMenu;
+import javax.swing.JMenuBar;
+import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
+import javax.swing.JScrollPane;
+import javax.swing.JTable;
+import javax.swing.JTextField;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.table.DefaultTableModel;
 
-public class stocks extends JFrame {
+public class StockWatcher extends JFrame {
     // Variables declaration                     
     private JButton reset;
     private JPanel buyPanel;
@@ -18,11 +38,12 @@ public class stocks extends JFrame {
     private JMenuItem jMenuItem1;
     private JMenuItem exitMenuBut;
     private JMenuItem jMenuItem3;
+    private JMenuItem jMenuItem4;
     private JScrollPane jScrollPane2;
     private JScrollPane jScrollPane3;
     private JPopupMenu.Separator jSeparator1;
-    private JTable jTable2;
-    private JTable jTable3;
+    private JTable sellTable;
+    private JTable buyTable;
     private JTable mainTable;
     private JScrollPane mainTablePanel;
     private JMenuBar menuBar;
@@ -35,12 +56,16 @@ public class stocks extends JFrame {
     
     ExcelODBC stockSheet;
     String query;
-    //allow the user to sort based of column click
     String lastSort = "";
     String ascOrDsc = "DESC";
     String searchQuery;
-
-    public stocks() {
+    int buy,hold,sell;
+    
+    Object [][] buyArray;
+    Object [][] sellArray;
+    Object [][] holdArray;
+    
+    public StockWatcher() {
     	stockSheet = new ExcelODBC("realTimeMarket");
     	getInitialData();
         initComponents();
@@ -49,13 +74,13 @@ public class stocks extends JFrame {
     private void initComponents() {    	
         buyPanel = new JPanel();
         jScrollPane3 = new JScrollPane();
-        jTable3 = new JTable();
+        buyTable = new JTable();
         holdPanel = new JPanel();
         holdScrollPane = new JScrollPane();
         holdTable = new JTable();
         sellPanel = new JPanel();
         jScrollPane2 = new JScrollPane();
-        jTable2 = new JTable();
+        sellTable = new JTable();
         mainTablePanel = new JScrollPane();
         mainTable = new JTable();
         menuPanel = new JPanel();
@@ -71,6 +96,7 @@ public class stocks extends JFrame {
         exitMenuBut = new JMenuItem();
         edit = new JMenu();
         jMenuItem3 = new JMenuItem();
+        jMenuItem4 = new JMenuItem();
 
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setTitle("Stock Watch");
@@ -80,7 +106,7 @@ public class stocks extends JFrame {
 
         buyPanel.setBorder(BorderFactory.createBevelBorder(0));
 
-        jTable3.setModel(new javax.swing.table.DefaultTableModel(
+        buyTable.setModel(new javax.swing.table.DefaultTableModel(
             new Object [][] {
                 {null, null, null, null},
                 {null, null, null, null},
@@ -91,7 +117,7 @@ public class stocks extends JFrame {
                 "Symbol", "Name", "Last", "Open" , "Close" , "Volume"
             }
         ));
-        jScrollPane3.setViewportView(jTable3);
+        jScrollPane3.setViewportView(buyTable);
 
         javax.swing.GroupLayout buyPanelLayout = new javax.swing.GroupLayout(buyPanel);
         buyPanel.setLayout(buyPanelLayout);
@@ -110,7 +136,6 @@ public class stocks extends JFrame {
                 .addGap(10, 10, 10))
         );
 
-        //holdPanel.setBackground(new java.awt.Color(255, 255, 0));
         holdPanel.setBorder(BorderFactory.createBevelBorder(0));
 
         holdTable.setModel(new javax.swing.table.DefaultTableModel(
@@ -120,7 +145,9 @@ public class stocks extends JFrame {
                 {null, null, null, null},
                 {null, null, null, null}
             },
-            stockSheet.getColumnNames()
+            new String [] {
+                    "Symbol", "Name", "Last", "Open" , "Close" , "Volume"
+                }
         ));
         holdScrollPane.setViewportView(holdTable);
 
@@ -141,19 +168,20 @@ public class stocks extends JFrame {
                 .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
 
-        //sellPanel.setBackground(new java.awt.Color(255, 255, 0));
         sellPanel.setBorder(BorderFactory.createBevelBorder(0));
         
-        jTable2.setModel(new javax.swing.table.DefaultTableModel(
+        sellTable.setModel(new javax.swing.table.DefaultTableModel(
             new Object [][] {
                 {null, null, null, null},
                 {null, null, null, null},
                 {null, null, null, null},
                 {null, null, null, null}
             },
-            stockSheet.getColumnNames()
+            new String [] {
+                    "Symbol", "Name", "Last", "Open" , "Close" , "Volume"
+                }
         ));
-        jScrollPane2.setViewportView(jTable2);
+        jScrollPane2.setViewportView(sellTable);
 
         javax.swing.GroupLayout sellPanelLayout = new javax.swing.GroupLayout(sellPanel);
         sellPanel.setLayout(sellPanelLayout);
@@ -198,12 +226,6 @@ public class stocks extends JFrame {
         });
         mainTable.setEnabled(false);
 
-        //searchField.setText("Begin typing to search...");
-        /*searchField.addMouseListener(new MouseAdapter(){
-        	public void mouseClicked(MouseEvent e){
-        		searchField.setText("");
-        	}
-        })*/;
         searchField.getDocument().addDocumentListener(new DocumentListener(){             
             
         	@Override
@@ -222,6 +244,8 @@ public class stocks extends JFrame {
         });
         
         search.setText("Search");
+        
+        search.setVisible(false);
         search.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent evt) {
                 searchActionPerformed(evt);
@@ -230,8 +254,15 @@ public class stocks extends JFrame {
 
         searchText.setText("SEARCH");
 
-        stratChooser.setModel(new DefaultComboBoxModel(new String[] { "Item 1", "Item 2", "Item 3", "Item 4" }));
-
+        stratChooser.setModel(new DefaultComboBoxModel(new String[] { "Please Select a Strategy Pattern","Item 1", "Item 2", "Item 3", "Item 4","Random" }));
+        stratChooser.addActionListener(new ActionListener(){
+        	public void actionPerformed(ActionEvent evt){
+        		if(stratChooser.getSelectedItem() != "Please Select a Strategy Pattern"){
+        			stratChooser(stratChooser.getSelectedIndex());
+        		}	
+        	}
+        });
+       
         reset.setText("RESET");
         reset.addActionListener(new ActionListener() {
         	public void actionPerformed(ActionEvent evt){
@@ -263,18 +294,23 @@ public class stocks extends JFrame {
                 .addComponent(searchField)
                 .addComponent(search)
                 .addComponent(searchText)
-                .addComponent(stratChooser, javax.swing.GroupLayout.PREFERRED_SIZE, 23, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addComponent(stratChooser, GroupLayout.PREFERRED_SIZE, 23, GroupLayout.PREFERRED_SIZE)
                 .addComponent(reset))
         );
 
         file.setText("File");
 
-        jMenuItem1.setText("jMenuItem1");
+        jMenuItem1.setText("Disconnect");
+        jMenuItem1.addActionListener(new ActionListener() {
+        	public void actionPerformed(ActionEvent evt){
+        		//implement action function
+        	}
+        });
         file.add(jMenuItem1);
         file.add(jSeparator1);
 
         exitMenuBut.setText("EXIT");
-        exitMenuBut.addActionListener(new java.awt.event.ActionListener() {
+        exitMenuBut.addActionListener(new ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 exitButton(evt);
             }
@@ -283,10 +319,23 @@ public class stocks extends JFrame {
 
         menuBar.add(file);
 
-        edit.setText("Edit");
+        edit.setText("Help");
 
-        jMenuItem3.setText("jMenuItem3");
+        jMenuItem3.setText("Strategy Pattern Information");
         edit.add(jMenuItem3);
+        jMenuItem4.setText("About");
+        edit.add(jMenuItem4);
+        
+        jMenuItem3.addActionListener(new ActionListener(){
+        	public void actionPerformed(ActionEvent evt){
+        		stratPatternHelp();
+        	}
+        });
+        jMenuItem4.addActionListener(new ActionListener(){
+        	public void actionPerformed(ActionEvent evt){
+        		helpButton();
+        	}
+        });
 
         menuBar.add(edit);
 
@@ -339,9 +388,16 @@ public class stocks extends JFrame {
         pack();
     }                    
 
-    public void getInitialData(){
+	public void getInitialData(){
     	query = "Select * from [Sheet1$]";
     	stockSheet.query(query);
+    }
+    private void helpButton(){
+    	JOptionPane.showMessageDialog(super.getContentPane(), CONSTANTS.ABOUT);
+    }
+    
+    private void stratPatternHelp(){   	
+    	JOptionPane.showMessageDialog(super.getContentPane(), CONSTANTS.STRATEGY_PATTERN_INFO);
     }
     
     private void exitButton(ActionEvent evt) {     
@@ -353,6 +409,36 @@ public class stocks extends JFrame {
     	searchField.setText("");
     	getInitialData();
     	repaintTable();
+    	buyTable.setModel(new javax.swing.table.DefaultTableModel(
+                new Object [][] {
+                    {null, null, null, null},
+                    {null, null, null, null},
+                    {null, null, null, null},
+                    {null, null, null, null}
+                },
+                new String [] {
+                    "Symbol", "Name", "Last", "Open" , "Close" , "Volume"
+                }));
+    	holdTable.setModel(new javax.swing.table.DefaultTableModel(
+                new Object [][] {
+                    {null, null, null, null},
+                    {null, null, null, null},
+                    {null, null, null, null},
+                    {null, null, null, null}
+                },
+                new String [] {
+                    "Symbol", "Name", "Last", "Open" , "Close" , "Volume"
+                }));
+    	sellTable.setModel(new javax.swing.table.DefaultTableModel(
+                new Object [][] {
+                    {null, null, null, null},
+                    {null, null, null, null},
+                    {null, null, null, null},
+                    {null, null, null, null}
+                },
+                new String [] {
+                    "Symbol", "Name", "Last", "Open" , "Close" , "Volume"
+                }));
     }
     private void repaintTable(){
     	mainTable.setModel(new DefaultTableModel(
@@ -366,15 +452,206 @@ public class stocks extends JFrame {
     	query = "Select * from [Sheet1$] where NAME like '%" + passedQuery + "%'";
     	stockSheet.query(query);
     	repaintTable();
-    	//System.out.println(query);
+    }
+    
+    private void stratChooser(int i) {
+    	buy = 0;
+    	hold = 0;
+    	sell = 0;
+    	Stock[] stocks = stockSheet.getStockArray();
+		for (Stock currStock: stocks) {
+			switch(i) {
+			case 1:
+				currStock.whatToDo(new BuyIncSellDec());
+				break;
+			case 2:
+				currStock.whatToDo(new BuyDecSellInc());				
+				break;
+			case 3:
+				currStock.whatToDo(new BuyCharSellTime());
+				break;
+			case 4:
+				currStock.whatToDo(new BuyPrimeSellEven());
+				break;
+			case 5:
+				currStock.whatToDo(new BuyTestSellTest());
+				break;
+			default:
+				System.err.println("Error in strategy chooser");
+				break;
+			}
+			
+			if (currStock.getBsh() == BSH.BUY) {
+				buy++;
+			} else if (currStock.getBsh() == BSH.SELL) {
+				sell++;
+			} else {
+				hold++;
+			}
+		}
+		buyHoldSell(stocks);
+	}
+    private void buyHoldSell(Stock[] stocks){
+    	int buyTemp=0;
+    	int sellTemp=0;
+    	int holdTemp=0;
+    	buyArray = new Object [buy][10];
+    	sellArray = new Object [sell][10];
+    	holdArray = new Object [hold][10];
+    	Object [][] smallBuy = new Object [buy][6];
+    	Object [][] smallSell = new Object [sell][6];
+    	Object [][] smallHold = new Object [hold][6];
+    	for (Stock currStock: stocks) {
+    		if(currStock.getBsh()==BSH.BUY){
+    			columnsInArray(buyArray,currStock,buyTemp);
+    			smallArray(smallBuy,currStock,buyTemp);
+    			buyTemp++;
+    		}else if(currStock.getBsh()==BSH.SELL){
+    			columnsInArray(sellArray,currStock,sellTemp);
+    			smallArray(smallSell,currStock,sellTemp);
+    			sellTemp++;
+    		}else{
+    			columnsInArray(holdArray,currStock,holdTemp);
+    			smallArray(smallHold,currStock,holdTemp);
+    			holdTemp++;
+    		}
+    	}
+    	buyTable.setModel(new DefaultTableModel(
+				smallBuy,
+				new String [] {"Symbol", "Name", "Last", "Open" , "Close" , "Volume"}){
+    		private static final long serialVersionUID = 1L;
+
+            @Override
+    		public boolean isCellEditable(int row,int column){
+    			return false;
+    		}
+    	});
+    	sellTable.setModel(new DefaultTableModel(
+				smallSell,
+				new String [] {"Symbol", "Name", "Last", "Open" , "Close" , "Volume"}){
+    		private static final long serialVersionUID = 1L;
+
+        	@Override
+			public boolean isCellEditable(int row,int column){
+				return false;
+        	}
+		});
+    	holdTable.setModel(new DefaultTableModel(
+				smallHold,
+				new String [] {"Symbol", "Name", "Last", "Open" , "Close" , "Volume"}){
+    		private static final long serialVersionUID = 1L;
+
+        	@Override
+			public boolean isCellEditable(int row,int column){
+				return false;
+        	}
+        });
+    	
+    	if(buyTemp >= 1){
+    		buyTable.addMouseListener(new MouseAdapter(){
+    			public void mouseClicked(MouseEvent e){
+    				if(e.getClickCount()==2){
+    					JTable target = (JTable)e.getSource();
+        				int row = target.getSelectedRow();
+    					printMessage(buyArray,row,"buy");
+    				}
+    			}
+    		});
+    	}
+    	if(sellTemp >= 1){
+    		sellTable.addMouseListener(new MouseAdapter(){
+    			public void mouseClicked(MouseEvent e){
+    				if(e.getClickCount()==2){
+    					JTable target = (JTable)e.getSource();
+        				int row = target.getSelectedRow();
+    					printMessage(sellArray,row,"sell");
+    				}
+    			}
+    		});
+    	}
+    	if(holdTemp >= 1){
+    		holdTable.addMouseListener(new MouseAdapter(){
+    			public void mouseClicked(MouseEvent e){
+    				if(e.getClickCount()==2){
+    					JTable target = (JTable)e.getSource();
+        				int row = target.getSelectedRow();
+    					printMessage(holdArray,row,"hold");
+    				}
+    			}
+    		});
+    	}
+    }
+    private void printMessage(Object[][] array,int row,String doWhat){
+    	String moreInfo;
+    	moreInfo = "<html><b>Symbol</b>::" + array[row][0] + "\n";
+    	moreInfo += "<html><b>Name</b>:: "+ array[row][1] + "\n";
+    	moreInfo += "<html><b>Last</b>::$" + array[row][2] + "\n";
+    	moreInfo += "<html><b>Open</b>::$" + array[row][3] + "\n";
+    	moreInfo += "<html><b>Close</b>::$" + array[row][4] + "\n";
+    	moreInfo += "<html><b>High</b>::$" + array[row][7] + "\n";
+    	moreInfo += "<html><b>Low</b>::$" + array[row][8] + "\n";
+    	moreInfo += "<html><b>Volume</b>::" + array[row][9] + "\n";
+    	moreInfo += "\n<html><b>Last Updated</b>::\n";
+    	moreInfo += "<html><b>Time</b>::" + array[row][5];
+    	moreInfo += "<html><b>Date</b>::" + array[row][6];
+    	
+    	switch (doWhat){
+		case "buy":
+			moreInfo += "<html><b>BUY!</b>";
+			break;
+		case "sell":
+			moreInfo += "<html><b>SELL!</b>";
+			break;
+		case "hold":
+			moreInfo += "<html><b>HOLD!</b>";
+			break;
+	}
+    	moreInfo +="</html>";
+    	JOptionPane.showMessageDialog(super.getContentPane(), moreInfo);
+    }
+    
+    private static void smallArray(Object[][] data,Stock currStock,int i){
+    	data[i][0]=currStock.getSymbol();
+    	data[i][1]=currStock.getName();
+    	data[i][2]=currStock.getLast();
+    	data[i][3]=currStock.getOpen();
+    	data[i][4]=currStock.getClose();
+    	data[i][5]=currStock.getVolume();
     }
 
+    /*
+     * This function allows us to insert all information into a given array
+     */
+    public static void columnsInArray(Object[][] data,Stock currStock,int i){
+    	data[i][0]=currStock.getSymbol();    	
+    	data[i][1]=currStock.getName();
+    	data[i][2]=currStock.getLast();
+    	data[i][3]=currStock.getOpen();
+    	data[i][4]=currStock.getClose();
+    	data[i][5]=currStock.getTime();
+    	data[i][6]=currStock.getDate();
+    	data[i][7]=currStock.getHigh();
+    	data[i][8]=currStock.getLow();
+    	data[i][9]=currStock.getVolume();
+    }
+    
+    private void addListenerToTable(final JTable table,String tableName){
+    	System.out.println(table.getName());
+    	table.addMouseListener(new MouseAdapter(){
+    		public void mouseClicked(MouseEvent e){
+    			if(e.getClickCount()==2){
+    				JTable target = (JTable)e.getSource();
+    				System.out.println(target.getName());
+    				int row = target.getSelectedRow();
+    				String moreInfo = "Symbol:";
+    				moreInfo = moreInfo+sellArray[row][0];
+    				JOptionPane.showMessageDialog(table.getParent(), moreInfo);
+    				System.out.println("You clicked ROW::"+row);
+    			}
+    		}
+    	});
+    }
     public static void main(String args[]) {
-        /* Set the Nimbus look and feel */
-        //<editor-fold defaultstate="collapsed" desc=" Look and feel setting code (optional) ">
-        /* If Nimbus (introduced in Java SE 6) is not available, stay with the default look and feel.
-         * For details see http://download.oracle.com/javase/tutorial/uiswing/lookandfeel/plaf.html 
-         */
         try {
             for (javax.swing.UIManager.LookAndFeelInfo info : javax.swing.UIManager.getInstalledLookAndFeels()) {
                 if ("Nimbus".equals(info.getName())) {
@@ -383,20 +660,17 @@ public class stocks extends JFrame {
                 }
             }
         } catch (ClassNotFoundException ex) {
-            java.util.logging.Logger.getLogger(stocks.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+            java.util.logging.Logger.getLogger(StockWatcher.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
         } catch (InstantiationException ex) {
-            java.util.logging.Logger.getLogger(stocks.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+            java.util.logging.Logger.getLogger(StockWatcher.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
         } catch (IllegalAccessException ex) {
-            java.util.logging.Logger.getLogger(stocks.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+            java.util.logging.Logger.getLogger(StockWatcher.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
         } catch (javax.swing.UnsupportedLookAndFeelException ex) {
-            java.util.logging.Logger.getLogger(stocks.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+            java.util.logging.Logger.getLogger(StockWatcher.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
         }
-        //</editor-fold>
-
-        /* Create and display the form */
-        java.awt.EventQueue.invokeLater(new Runnable() {
+        EventQueue.invokeLater(new Runnable() {
             public void run() {
-                new stocks().setVisible(true);
+                new StockWatcher().setVisible(true);
             }
         });
     }
